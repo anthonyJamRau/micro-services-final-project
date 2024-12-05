@@ -10,7 +10,7 @@ class playingCard:
             'spades': '♠'
         }
 
-    def prettyReturn(self):
+    def prettyReturn_cmd(self):
 
         # Define the card face with ASCII characters
         card_width = 9
@@ -28,3 +28,17 @@ class playingCard:
             f"+---------+"
         ]
         return "\n".join(card)
+    
+    def prettyReturn(self):
+        # Get the suit symbol
+        suit_display = self.suits_symbols.get(self.suit, '?')
+
+        # HTML representation of the card
+        card_html = f"""
+        <div class="card">
+            <div class="card-top">{self.rank} {suit_display}</div>
+            <div class="card-center">{suit_display}</div>
+            <div class="card-bottom">{suit_display} {self.rank}</div>
+        </div>
+        """
+        return card_html

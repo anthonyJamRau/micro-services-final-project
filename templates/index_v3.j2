@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <title>Blackjack Practice</title>
+  <style>
+    @import url(https://fonts.googleapis.com/css?family=Roboto:500);
+    body {
+      font-family: "Roboto";
+      margin: 0;
+      padding: 0;
+      background-color: #2c3e50;
+      color: #ecf0f1;
+      text-align: center;
+    }
+
+    h3 {
+      margin-top: 20px;
+    }
+
+    .btn {
+      background-color: #3498db;
+      border: none;
+      color: white;
+      padding: 10px 20px;
+      text-align: center;
+      text-decoration: none;
+      display: inline-block;
+      font-size: 16px;
+      margin: 5px;
+      cursor: pointer;
+      border-radius: 5px;
+    }
+
+    .btn:hover {
+      background-color: #2980b9;
+    }
+
+    .card {
+      font-size: 20px;
+      margin: 10px auto;
+      padding: 10px;
+      border: 2px solid #ecf0f1;
+      border-radius: 5px;
+      display: inline-block;
+      background-color: #34495e;
+      color: #ecf0f1;
+    }
+
+    .top-info {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      text-align: left;
+      background-color: #34495e;
+      padding: 10px;
+      border-radius: 5px;
+      font-size: 16px;
+    }
+
+    .container {
+      margin-top: 30px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="top-info">
+    <div id="balance-display">Balance: $1000</div>
+    <div id="min-bet-display">Bet: $5</div>
+  </div>
+  <h3>Blackjack Simulation</h3>
+
+  {% if not google_data %}
+    <p>You are not logged in. Click below to sign in with Google.</p>
+    <a href="/login" class="btn">Sign in with Google</a>
+  {% else %}
+    <p>Welcome, {{ google_data.name }}! </p>
+
+    <div class="container">
+      <button id="start-btn" class="btn">New Hand</button>
+      <button id="hit-btn" class="btn" style="display:none;">Hit</button>
+      <button id="stand-btn" class="btn" style="display:none;">Stand</button>
+      <button id="reset-btn" class="btn">Reset Game</button>
+      <button id="double-bet-btn" class="btn" style="display:none;">Double Down</button>
+
+      <div id="user-hand" class="card" style="display:none;"></div>
+      <div id="dealer-hand" class="card" style="display:none;"></div>
+      <p id="game-message" style="margin-top: 20px; font-size: 18px;"></p>
+    </div>
+
+    <div class = "container">
+      <button id="increase-min-bet-btn" class="btn">Increase Bet</button>
+      <button id="decrease-min-bet-btn" class="btn">Decrease Bet</button>
+    </div>
+
+    <!-- Help Section -->
+    <div id="help-section" class="card" style="display:none; margin-top: 20px;">
+      <p id="help-text">
+
+      This is a Blackjack simulation that will help you learn how to count cards with the Hi-Lo Method. <br><br><br>
+      <a href="https://bicyclecards.com/how-to-play/blackjack" target="_blank" style="color: white;">Blackjack Rules</a> <br>
+      <a href="https://www.instructables.com/Card-Counting-and-Ranging-Bet-Sizes/" target="_blank" style="color: white;">Learn more about card counting and what the help info means</a> <br><br><br>
+
+      Help info: Running Count, True Count, Simple Policy <br>
+      </p>
+      <p id="card-count" style="font-size: 18px;">Card Count: Loading...</p>
+      <p id="true-count" style="font-size: 18px;">True Count: Loading...</p>
+      <p id="decks-remain" style="font-size: 18px;">Decks Remaining: Loading...</p>
+      <div id="dataframe-table" style="margin-top: 20px; display: inline-block; text-align: center;"></div>
+    </div>
+
+    <!-- Show/Hide Help Button -->
+    <button id="toggle-help-btn" class="btn" style="margin-top: 20px;">Show Help</button>
+  {% endif %}
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      const startBtn = document.getElementById('start-btn');
+      const hitBtn = document.getElementById('hit-btn');
+      const standBtn = document.getElementById('stand-btn');
+      const resetBtn = document.getElementById('reset-btn');
+      const doubleBetBtn = document.getElementById('double-bet-btn');
+      const increaseMinBetBtn = document.getElementById('increase-min-bet-btn');
+      const decreaseMinBetBtn = document.getElementById('decrease-min-bet-btn');
+      const balanceDisplay = document.getElementById('balance-display');
+      const minBetDisplay = document.getElementById('min-bet-display');
+      const userHandDiv = document.getElementById('user-hand');
+      const dealerHandDiv = document.getElementById('dealer-hand');
+      const gameMessage = document.getElementById('game-message');
+      const toggleHelpBtn = document.getElementById('toggle-help-btn');
+      const helpSection = document.getElementById('help-section');
+      const cardCountDisplay = document.getElementById('card-count');
+      const cardTrueCountDisplay = document.getElementById('true-count');
+      const decksRemainDisplay = document.getElementById('decks-remain');
+
+      let cardCountInterval = null;
+
+      function toggleButtons(isPlaying) {
+        startBtn.style.display = isPlaying ? 'none' : 'inline-block';
+        resetBtn.style.display = isPlaying ? 'none' : 'inline-block';
+        hitBtn.style.display = isPlaying ? 'inline-block' : 'none';
+        standBtn.style.display = isPlaying ? 'inline-block' : 'none';
+        increaseMinBetBtn.style.display = isPlaying ? 'none' : 'inline-block';
+        decreaseMinBetBtn.style.display = isPlaying ? 'none' : 'inline-block';
+      }
+
+      function toggleDouble(hasDoubled) {
+        doubleBetBtn.style.display = hasDoubled ? 'inline-block' : 'none';
+      }
+
+      async function fetchBalance() {
+        try {
+          const response = await fetch('/balance');
+          const data = await response.json();
+          balanceDisplay.textContent = `Balance: $${data.balance}`;
+        } catch (error) {
+          console.error('Error fetching balance:', error);
+          balanceDisplay.textContent = 'Balance: Error loading balance.';
+        }
+      }
+
+      async function fetchMinBet() {
+        try {
+          const response = await fetch('/minbet');
+          const data = await response.json();
+          minBetDisplay.textContent = `Bet: $${data.min_bet}`;
+        } catch (error) {
+          console.error('Error fetching MinBet:', error);
+          minBetDisplay.textContent = 'Minbet: Error loading Minbet.';
+        }
+      }
+
+      async function fetchCardCount() {
+        try {
+          const response = await fetch('/get_count');
+          const data = await response.json();
+          cardCountDisplay.textContent = `Card Count: ${data.card_count}`;
+        } catch (error) {
+          console.error('Error fetching card count:', error);
+          cardCountDisplay.textContent = 'Card Count: Error fetching count.';
+        }
+      }
+
+      async function fetchTrueCardCount() {
+        try {
+          const response = await fetch('/get_true_count');
+          const data = await response.json();
+          cardTrueCountDisplay.textContent = `True Card Count: ${data.card_true_count}`;
+        } catch (error) {
+          console.error('Error fetching card count:', error);
+          cardTrueCountDisplay.textContent = 'True Card Count: Error fetching count.';
+        }
+      }
+
+      async function fetchDecksRemaining() {
+        try {
+          const response = await fetch('/get_decks_remain');
+          const data = await response.json();
+          decksRemainDisplay.textContent = `Decks Remaining in Shoe: ${data.decks_remain}`;
+        } catch (error) {
+          console.error('Error fetching decks remaining:', error);
+          decksRemainDisplay.textContent = 'Error fetching decks remaining.';
+        }
+      }
+
+      async function fetchDataFrame() {
+      try {
+          const response = await fetch('/get_policy'); // Endpoint for the DataFrame
+          const data = await response.json();
+          const tableHTML = data.policy; // Retrieve the HTML representation
+          const dataframeTable = document.getElementById('dataframe-table');
+          dataframeTable.innerHTML = tableHTML; // Insert the HTML into the placeholder
+      } catch (error) {
+          console.error('Error fetching dataframe:', error);
+          document.getElementById('dataframe-table').innerHTML = '<p>Error loading table.</p>';
+      }
+      }
+
+      // Toggle Help Section Visibility
+      toggleHelpBtn.addEventListener('click', () => {
+        if (helpSection.style.display === 'none') {
+          helpSection.style.display = 'block';
+          toggleHelpBtn.textContent = 'Hide Help';
+          fetchCardCount();
+          fetchTrueCardCount();
+          fetchDecksRemaining();
+          fetchDataFrame();
+        } else {
+          helpSection.style.display = 'none';
+          toggleHelpBtn.textContent = 'Show Help';
+          clearInterval(cardCountInterval); // Stop updates
+        }
+      });
+
+      startBtn.addEventListener('click', async () => {
+        try {
+          const response = await fetch('/start', { method: 'POST' });
+          const data = await response.json();
+          
+          toggleButtons(true);
+          toggleDouble(true);
+          fetchCardCount();
+          fetchTrueCardCount();
+          fetchDecksRemaining();
+          fetchBalance();
+          userHandDiv.style.display = 'block';
+          dealerHandDiv.style.display = 'block';
+
+          userHandDiv.innerHTML = `Your Hand: ${data.user_hand.join(', ')}`;
+          dealerHandDiv.innerHTML = `Dealer's Hand: ${data.dealer_hand.join(', ')}`;
+          gameMessage.textContent = data.message;
+        } catch (error) {
+          console.error('Error starting game:', error);
+        }
+      });
+
+      increaseMinBetBtn.addEventListener('click', async () => {
+        try {
+          const response = await fetch('/increasebet', { method: 'POST' });
+          const data = await response.json();
+          fetchMinBet();
+        } catch (error) {
+          console.error('Error updating bet:', error);
+        }
+      });
+
+      decreaseMinBetBtn.addEventListener('click', async () => {
+        try {
+          const response = await fetch('/decreasebet', { method: 'POST' });
+          const data = await response.json();
+          fetchMinBet();
+        } catch (error) {
+          console.error('Error updating bet:', error);
+        }
+      });
+
+      doubleBetBtn.addEventListener('click', async () => {
+        try {
+          const response = await fetch('/doublebet', { method: 'POST' });
+          const data = await response.json();
+          toggleDouble(false);
+          fetchMinBet();
+          fetchBalance();
+        } catch (error) {
+          console.error('Error updating bet:', error);
+        }
+      });
+
+
+      hitBtn.addEventListener('click', async () => {
+        try {
+          const response = await fetch('/hit', { method: 'POST' });
+          const data = await response.json();
+          fetchCardCount();
+          userHandDiv.innerHTML += `, ${data.card}`;
+          gameMessage.textContent = data.hand_value > 21 
+            ? 'Bust! Dealer wins.' 
+            : 'You hit.';
+
+          if (data.hand_value > 21) {
+            toggleButtons(false);
+          }
+          toggleDouble(false);
+        } catch (error) {
+          console.error('Error hitting:', error);
+        }
+      });
+
+      standBtn.addEventListener('click', async () => {
+        try {
+          const response = await fetch('/stand', { method: 'POST' });
+          const data = await response.json();
+          fetchCardCount();
+          fetchTrueCardCount();
+          fetchDecksRemaining();
+          fetchMinBet();
+          fetchBalance();
+          userHandDiv.innerHTML = `Your Hand: ${data.user_hand.join(', ')}`;
+          dealerHandDiv.innerHTML = `Dealer's Hand: ${data.dealer_hand.join(', ')}`;
+          gameMessage.textContent = data.result;
+
+          toggleButtons(false);
+          toggleDouble(false);
+
+        } catch (error) {
+          console.error('Error standing:', error);
+        }
+      });
+
+
+      resetBtn.addEventListener('click', async () => {
+        try {
+          const response = await fetch('/reset', { method: 'POST' });
+          const data = await response.json();
+          fetchBalance();
+          fetchMinBet();
+          fetchCardCount();
+          fetchTrueCardCount();
+          fetchDecksRemaining();
+          userHandDiv.style.display = 'none';
+          dealerHandDiv.style.display = 'none';
+          gameMessage.textContent = '';
+          alert(data.message);
+        } catch (error) {
+          console.error('Error resetting game:', error);
+        }
+      });
+    });
+  </script>
+</body>
+
+</html>

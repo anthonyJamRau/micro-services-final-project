@@ -1,1 +1,5 @@
 Flask
+Flask-Dance[sqla]
+blinker
+python-dotenv
+pandas
