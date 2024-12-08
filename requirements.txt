@@ -3,3 +3,5 @@ Flask-Dance[sqla]
 blinker
 python-dotenv
 pandas
+flask_sqlalchemy
+mysql-connector-python

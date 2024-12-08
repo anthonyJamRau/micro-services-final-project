@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Usage Statistics</title>
+    <style>
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 10px;
+            text-align: left;
+            border: 1px solid #ddd;
+        }
+        th {
+            background-color: #f4f4f4;
+        }
+    </style>
+</head>
+<body>
+    <h1>Usage Statistics</h1>
+    <p>Total Requests: {{ total_requests }}</p>
+    <p>Successes: {{ successes }}</p>
+    <p>Failures: {{ failures }}</p>
+    <p>Authorizations: {{ authorizations }}</p>
+
+    <h2>Endpoint Statistics</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Endpoint</th>
+                <th>Request Count</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for stat in endpoint_data %}
+            <tr>
+                <td>{{ stat.endpoint }}</td>
+                <td>{{ stat.request_count }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>

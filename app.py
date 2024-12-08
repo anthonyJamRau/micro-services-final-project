@@ -1,16 +1,50 @@
 import random
 from flask import Flask, jsonify, request, render_template, redirect, url_for
 from flask_dance.contrib.google import make_google_blueprint, google
-from flask_dance.consumer import oauth_authorized
 from helper_card import playingCard
 import itertools
 from dotenv import load_dotenv
 import os
 from policy_definition import return_policy
-import pandas as pd
+from flask_sqlalchemy import SQLAlchemy
+from flask import session
+import uuid
+import json
+from sqlalchemy import func
 
 load_dotenv()
 app = Flask(__name__)
+
+app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+mysqlconnector://root:example@mysql/blackjack'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SQLALCHEMY_ECHO'] = True
+db = SQLAlchemy(app)
+
+
+
+class Users(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(255), unique=True, nullable=False)
+    name = db.Column(db.String(255), nullable=False)
+    login_time = db.Column(db.DateTime, default=db.func.current_timestamp())
+
+class UsageLogs(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    endpoint = db.Column(db.String(255), nullable=False)
+    method = db.Column(db.String(10), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    timestamp = db.Column(db.DateTime, default=db.func.current_timestamp())
+    status_code = db.Column(db.Integer,nullable=False)
+
+class UsageStats(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    session_id = db.Column(db.String(255), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    game_id = db.Column(db.String(255), nullable=True)
+    hand_id = db.Column(db.String(255), nullable = True)
+    action_type = db.Column(db.String(255),nullable = True)
+    game_state = db.Column(db.JSON,nullable = True)
+    timestamp = db.Column(db.DateTime, default=db.func.current_timestamp())
 
 client_id = os.getenv('GOOGLE_CLIENT_ID')
 client_secret = os.getenv('GOOGLE_CLIENT_SECRET')
@@ -82,6 +116,8 @@ class blackJackSim:
 
 
     def calculateHandValue(self, hand):
+        if len(hand) == 0:
+            return 0
         hand_value = 0
         aces = 0
         for card in hand:
@@ -113,10 +149,8 @@ class blackJackSim:
     def resolve_bets(self,outcome):
         if outcome == 'win':
             if self.double_bet:
-                print('here')
                 self.user_balance += self.minimum_bet*4
             else:
-                print('here')
                 self.user_balance += self.minimum_bet*2
         elif outcome == 'tie':
             self.user_balance += self.minimum_bet
@@ -149,17 +183,67 @@ class blackJackSim:
 
     def get_minbet(self):
         return self.minimum_bet
-    
+
+
+@app.after_request
+def log_usage(response):
+    user_id = session.get('user_id',None)
+
+    endpoint = request.endpoint or request.path
+    method = request.method
+    status_code = response.status_code
+
+    try:
+        usageLog = UsageLogs(user_id=user_id,endpoint=endpoint,method=method,status_code=status_code)
+        db.session.add(usageLog)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        print(f"Failed to log request: {e}")
+
+    return response
+
+def log_game_action(session_id,user_id,game_id,hand_id,action,game_state):
+    try:
+        game_log = UsageStats(
+            session_id=session_id,
+            user_id=user_id,
+            game_id=game_id,
+            hand_id=hand_id,
+            action_type=action,
+            game_state=json.dumps(game_state)
+        )
+        db.session.add(game_log)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        print(f"Failed to log game action: {e}")
+    return
     
 @app.route("/")
 def index():
     google_data = None
     user_info_endpoint = '/oauth2/v2/userinfo'
+    
     if google.authorized:
         try:
             google_data = google.get(user_info_endpoint).json()
         except:
             return redirect(url_for("google.login"))
+        
+    if google_data:
+        email = google_data.get("email")
+        name = google_data.get("name")
+        user = Users.query.filter_by(email=email).first()
+        if not user:
+            user = Users(email=email, name=name)
+            db.session.add(user)
+            db.session.commit()
+
+        session['user_id'] = user.id
+        if 'session_id' not in session:
+            session['session_id'] = str(uuid.uuid4())
+
     return render_template('index_v3.j2', google_data=google_data)
 
 @app.route('/login')
@@ -167,24 +251,10 @@ def login():
     return redirect(url_for('google.login'))
 
 
-@app.route('/deal', methods=['GET'])
-def deal():
-    card = simulator.dealCard()
-    if card:
-        pretty_card_html = playingCard(rank=card[0], suit=card[1]).prettyReturn()
-        return jsonify({
-            'message': 'Card dealt successfully',
-            'current_count': simulator.getCurrentCount(),
-            'card_dealt': pretty_card_html
-        })
-    else:
-        return jsonify({
-            'message': 'No cards left in the shoe',
-            'current_count': simulator.getCurrentCount()
-        })
-
 @app.route('/reset',methods = ['POST'])
 def reset():
+    session['game_id'] = str(uuid.uuid4())
+
     simulator.__init__(shoe_size=9)
     return jsonify({
         'message' : 'Shoe and count reset successfully'
@@ -192,8 +262,26 @@ def reset():
 
 @app.route('/start', methods=['POST'])
 def start():
+    if 'game_id' not in session:
+        session['game_id'] = str(uuid.uuid4())
+    
+    session['hand_id'] = str(uuid.uuid4())
+    session_id = session['session_id']
+    game_id = session['game_id']
+    hand_id = session['hand_id']
+    user_id = session['user_id']
+
     user_hand, dealer_hand = simulator.startHand()
     simulator.user_balance -= simulator.minimum_bet
+
+    log = log_game_action(session_id,user_id,game_id,hand_id,'hand-start',{
+        'user_hand':simulator.calculateHandValue(simulator.getUserHand()),
+        'dealer_hand':simulator.calculateHandValue(simulator.getDealerHand()),
+        'balance':simulator.get_balance(),
+        'count':simulator.getCurrentCount(),
+        'true_count':simulator.getTrueCount(),
+        'bet': simulator.get_minbet()*2 if simulator.double_bet else simulator.get_minbet()
+    })
     return jsonify({
         'user_hand': [playingCard(rank=card[0], suit=card[1]).prettyReturn() for card in user_hand],
         'dealer_hand': [playingCard(rank=card[0], suit=card[1]).prettyReturn() for card in dealer_hand[:1]],  # Only show one dealer card
@@ -202,8 +290,24 @@ def start():
 
 @app.route('/hit', methods=['POST'])
 def hit():
+
     card = simulator.userHit()
     hand_value = simulator.calculateHandValue(simulator.getUserHand())
+
+    session_id = session['session_id']
+    game_id = session['game_id']
+    hand_id = session['hand_id']
+    user_id = session['user_id']
+
+    log = log_game_action(session_id,user_id,game_id,hand_id,'post-hit',{
+        'user_hand':hand_value,
+        'dealer_hand':simulator.calculateHandValue(simulator.getDealerHand()),
+        'balance':simulator.get_balance(),
+        'count':simulator.getCurrentCount(),
+        'true_count':simulator.getTrueCount(),
+        'bet': simulator.get_minbet()*2 if simulator.double_bet else simulator.get_minbet()
+    })
+
     if hand_value > 21:
         simulator.double_bet = False
     return jsonify({
@@ -214,16 +318,15 @@ def hit():
 
 @app.route('/stand', methods=['POST'])
 def stand():
-    # Dealer hits until their hand value is 17 or higher
+
+
     while simulator.calculateHandValue(simulator.getDealerHand()) < 17:
         simulator.dealerHit()
 
     user_value = simulator.calculateHandValue(simulator.getUserHand())
     dealer_value = simulator.calculateHandValue(simulator.getDealerHand())
 
-    # if user_value > 21:
-    #     result = 'User busts! Dealer wins.'
-    #     outcome = 'loss'
+
     if dealer_value > 21:
         result = 'Dealer busts! User wins.'
         outcome = 'win'
@@ -236,9 +339,23 @@ def stand():
     else:
         result = 'It\'s a tie!'
         outcome = 'tie'
-    print(simulator.double_bet)
-    simulator.resolve_bets(outcome)
 
+
+    session_id = session['session_id']
+    game_id = session['game_id']
+    hand_id = session['hand_id']
+    user_id = session['user_id']
+
+    log = log_game_action(session_id,user_id,game_id,hand_id,'post-stand',{
+        'user_hand':user_value,
+        'dealer_hand':dealer_value,
+        'balance':simulator.get_balance(),
+        'count':simulator.getCurrentCount(), 
+        'true_count':simulator.getTrueCount(),
+        'bet': simulator.get_minbet()*2 if simulator.double_bet else simulator.get_minbet()
+    })
+
+    simulator.resolve_bets(outcome)
 
     return jsonify({
         'user_hand': [playingCard(rank=card[0], suit=card[1]).prettyReturn() for card in simulator.getUserHand()],
@@ -295,6 +412,46 @@ def get_decks_remain():
 def get_policy():
     return jsonify({"policy": simulator.getPolicy()})
 
+@app.route('/admin/usage', methods=['GET'])
+def admin_usage():
+    try:
+        total_requests = db.session.query(func.count(UsageLogs.id)).scalar()
+        successes = db.session.query(func.count(UsageLogs.id)).filter(
+            UsageLogs.status_code.between(200, 299)
+        ).scalar()
+        failures = db.session.query(func.count(UsageLogs.id)).filter(
+            UsageLogs.status_code >= 400
+        ).scalar()
+        authorizations = db.session.query(func.count(UsageLogs.id)).filter(
+            UsageLogs.status_code == 300
+        ).scalar()
+
+        endpoint_stats = db.session.query(
+            UsageLogs.endpoint,
+            func.count(UsageLogs.id).label('request_count')
+        ).group_by(UsageLogs.endpoint).all()
+
+        endpoint_data = [
+            {
+                "endpoint": stat.endpoint,
+                "request_count": stat.request_count
+            }
+            for stat in endpoint_stats
+        ]
+        return render_template(
+            'admin_usage.html',
+            total_requests=total_requests,
+            successes=successes,
+            failures=failures,
+            authorizations=authorizations,
+            endpoint_data=endpoint_data
+        )
+
+    except Exception as e:
+        return render_template('error.html', message=str(e)), 500
+
 if __name__ == "__main__":
+    with app.app_context():
+        db.create_all()
     simulator = blackJackSim(shoe_size=9)
-    app.run(debug=True)
+    app.run(debug=True, host = '0.0.0.0', port=5000)

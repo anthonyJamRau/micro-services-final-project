@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.app
+    ports:
+      - "5000:5000"
+    environment:
+      - DB_HOST=mysql
+      - DB_USER=root
+      - DB_PASSWORD=example
+      - DB_NAME=blackjack
+    depends_on:
+      - mysql
+    
+  mysql:
+    build:
+      context: .
+      dockerfile: Dockerfile.db
+    image: mysql:8.0
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: example
+      MYSQL_DATABASE: blackjack
+    volumes:
+      - db_data:/var/lib/mysql
+
+volumes:
+  db_data:
