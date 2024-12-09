@@ -31,14 +31,11 @@ apiVersion: v1
 kind: Service
 metadata:
   name: app-service
-  annotations:
-    networking.gke.io/managed-certificates: my-managed-cert
 spec:
   selector:
-    app: app
+    app: app  # Matches the labels in the deployment
   ports:
-  - protocol: TCP
+  - name: http
+    protocol: TCP
     port: 80
-    targetPort: 5000
-  type: LoadBalancer # Expose to external traffic
-  loadBalancerIP: 35.239.176.25
+    targetPort: 5000  # Port where the app listens
