@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-deployment
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: app
+  template:
+    metadata:
+      labels:
+        app: app
+    spec:
+      containers:
+      - name: app
+        image: 18arautm/microservices_final:app # Replace with your Docker image
+        ports:
+        - containerPort: 5000 # Your app's exposed port
+        env:
+        - name: DATABASE_HOST
+          value: "mysql" # MySQL Service name
+        - name: DATABASE_USER
+          value: "root"
+        - name: DATABASE_PASSWORD
+          value: "example"
+        - name: DATABASE_NAME
+          value: "blackjack"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: app-service
+  annotations:
+    networking.gke.io/managed-certificates: my-managed-cert
+spec:
+  selector:
+    app: app
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 5000
+  type: LoadBalancer # Expose to external traffic
+  loadBalancerIP: 35.239.176.25
