@@ -25,7 +25,7 @@ spec:
     spec:
       containers:
       - name: mysql
-        image: 18arautm/microservices_final:db8.0
+        image: 18arautm/microservices_final:db8.0.3
         ports:
         - containerPort: 3306
         env:

@@ -1,25 +1,3 @@
-# apiVersion: networking.k8s.io/v1
-# kind: Ingress
-# metadata:
-#   name: app-ingress
-#   annotations:
-#     networking.gke.io/managed-certificates: "my-managed-cert"
-#     ingress.kubernetes.io/static-ip: "35.239.176.25"  # Use the name of the static IP
-# spec:
-#   ingressClassName: gce  # Correct place to specify the ingress class
-#   rules:
-#   - host: professorblackjack.com
-#     http:
-#       paths:
-#       - path: /
-#         pathType: Prefix
-#         backend:
-#           service:
-#             name: app-service
-#             port:
-#               number: 80
-
-
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -40,9 +18,3 @@ spec:
             name: app-service
             port:
               number: 80
-  
-  # defaultBackend:
-  #   service:
-  #     name: app-service
-  #     port:
-  #       number: 80

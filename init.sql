@@ -27,4 +27,19 @@ CREATE TABLE usage_stats (
   FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
+CREATE TABLE blackjack_game_state (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  session_id VARCHAR(255) NOT NULL,
+  shoe JSON NOT NULL,
+  user_hand JSON NOT NULL,
+  dealer_hand JSON NOT NULL,
+  count INT NOT NULL DEFAULT 0,
+  true_count FLOAT NOT NULL DEFAULT 0,
+  user_balance INT NOT NULL DEFAULT 1000,
+  double_bet BOOLEAN NOT NULL DEFAULT FALSE,
+  minimum_bet INT NOT NULL DEFAULT 5,
+  timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
 
