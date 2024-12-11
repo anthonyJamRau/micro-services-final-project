@@ -45,6 +45,9 @@ Folder tree:
 ├── .env
 
 .env example (used for database config and Oauth flow)
+GOOGLE_CLIENT_ID= GCP credentials
+GOOGLE_CLIENT_SECRET= GCP credentials
+secret_key= manually generated
 
 
 ```
