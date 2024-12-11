@@ -171,6 +171,26 @@
         }
       }
 
+      function updateMinBetDisplay(minBet) {
+        minBetDisplay.textContent = `Bet: $${minBet}`;
+      }
+      
+      function updateBalance(balance) {
+        balanceDisplay.textContent = `Balance: $${balance}`;
+      }
+      
+      function updateCardCount(cardCount) {
+       cardCountDisplay.textContent = `Card Count: ${cardCount}`;
+      }
+      function updateTrueCardCount(trueCardCount) {
+       cardTrueCountDisplay.textContent = `True Card Count: ${trueCardCount}`;
+      }
+      function updateDecksRemaining(decksRemain) {
+       decksRemainDisplay.textContent = `Decks Remaining in Shoe: ${decksRemain}`;
+      }
+      
+      
+
       async function fetchCardCount() {
         try {
           const response = await fetch('/get_count');
@@ -240,10 +260,10 @@
           
           toggleButtons(true);
           toggleDouble(true);
-          fetchCardCount();
-          fetchTrueCardCount();
-          fetchDecksRemaining();
-          fetchBalance();
+          updateCardCount(data.card_count);
+          updateTrueCardCount(data.true_count);
+          updateDecksRemaining(data.decks_remain);
+          updateBalance(data.balance);
           userHandDiv.style.display = 'block';
           dealerHandDiv.style.display = 'block';
 
@@ -259,7 +279,7 @@
         try {
           const response = await fetch('/increasebet', { method: 'POST' });
           const data = await response.json();
-          fetchMinBet();
+          updateMinBetDisplay(data.min_bet);
         } catch (error) {
           console.error('Error updating bet:', error);
         }
@@ -269,7 +289,7 @@
         try {
           const response = await fetch('/decreasebet', { method: 'POST' });
           const data = await response.json();
-          fetchMinBet();
+          updateMinBetDisplay(data.min_bet);
         } catch (error) {
           console.error('Error updating bet:', error);
         }
@@ -280,8 +300,8 @@
           const response = await fetch('/doublebet', { method: 'POST' });
           const data = await response.json();
           toggleDouble(false);
-          fetchMinBet();
-          fetchBalance();
+          updateMinBetDisplay(data.min_bet);
+          updateBalance(data.balance);
         } catch (error) {
           console.error('Error updating bet:', error);
         }
@@ -292,7 +312,7 @@
         try {
           const response = await fetch('/hit', { method: 'POST' });
           const data = await response.json();
-          fetchCardCount();
+          updateCardCount(data.card_count);
           userHandDiv.innerHTML += `, ${data.card}`;
           gameMessage.textContent = data.hand_value > 21 
             ? 'Bust! Dealer wins.' 
@@ -311,11 +331,12 @@
         try {
           const response = await fetch('/stand', { method: 'POST' });
           const data = await response.json();
-          fetchCardCount();
-          fetchTrueCardCount();
-          fetchDecksRemaining();
-          fetchMinBet();
-          fetchBalance();
+
+          updateMinBetDisplay(data.min_bet);
+          updateCardCount(data.card_count);
+          updateTrueCardCount(data.true_count);
+          updateDecksRemaining(data.decks_remain);
+          updateBalance(data.balance);
           userHandDiv.innerHTML = `Your Hand: ${data.user_hand.join(', ')}`;
           dealerHandDiv.innerHTML = `Dealer's Hand: ${data.dealer_hand.join(', ')}`;
           gameMessage.textContent = data.result;
@@ -333,11 +354,11 @@
         try {
           const response = await fetch('/reset', { method: 'POST' });
           const data = await response.json();
-          fetchBalance();
-          fetchMinBet();
-          fetchCardCount();
-          fetchTrueCardCount();
-          fetchDecksRemaining();
+          updateMinBetDisplay(data.min_bet);
+          updateCardCount(data.card_count);
+          updateTrueCardCount(data.true_count);
+          updateDecksRemaining(data.decks_remain);
+          updateBalance(data.balance);
           userHandDiv.style.display = 'none';
           dealerHandDiv.style.display = 'none';
           gameMessage.textContent = '';

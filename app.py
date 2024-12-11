@@ -342,15 +342,27 @@ def reset():
     session_id=session['session_id']
 
     game_state = blackJackSim(shoe_size=6)
-    
-    response = jsonify({
-        'message' : 'Shoe and count reset successfully'
-    })
 
+    decks_remain = round(game_state.getStartingShoeSize()/52*(game_state.getShoeSize()/game_state.getStartingShoeSize()))
+    card_count = game_state.getCurrentCount()
+    true_count = game_state.getTrueCount()
+    balance = game_state.get_balance()
+    min_bet = game_state.get_minbet()
+
+    response = jsonify({
+        'decks_remain':decks_remain,
+        'card_count':card_count,
+        'true_count':true_count,
+        'balance':balance,
+        'min_bet':min_bet,
+        'message': 'Hands dealt'
+    })
 
     GameStateService.save_game_state(user_id,session_id,game_state)
     log_usage(request,response)
     return response
+
+
 @app.route('/start', methods=['POST'])
 def start():
     if 'game_id' not in session:
@@ -369,6 +381,10 @@ def start():
 
     user_hand, dealer_hand = game_state.startHand()
     game_state.user_balance -= game_state.minimum_bet
+    decks_remain = round(game_state.getStartingShoeSize()/52*(game_state.getShoeSize()/game_state.getStartingShoeSize()))
+    card_count = game_state.getCurrentCount()
+    true_count = game_state.getTrueCount()
+    balance = game_state.get_balance()
 
     log = log_game_action(session_id,user_id,game_id,hand_id,'hand-start',{
         'user_hand':game_state.calculateHandValue(game_state.getUserHand()),
@@ -381,7 +397,11 @@ def start():
     
     response = jsonify({
         'user_hand': [playingCard(rank=card[0], suit=card[1]).prettyReturn() for card in user_hand],
-        'dealer_hand': [playingCard(rank=card[0], suit=card[1]).prettyReturn() for card in dealer_hand[:1]],  # Only show one dealer card
+        'dealer_hand': [playingCard(rank=card[0], suit=card[1]).prettyReturn() for card in dealer_hand[:1]],
+        'decks_remain':decks_remain,
+        'card_count':card_count,
+        'true_count':true_count,
+        'balance':balance,
         'message': 'Hands dealt'
     })
     GameStateService.save_game_state(user_id,session_id,game_state)
@@ -402,6 +422,7 @@ def hit():
 
     card = game_state.userHit()
     hand_value = game_state.calculateHandValue(game_state.getUserHand())
+    card_count = game_state.getCurrentCount()
 
     log = log_game_action(session_id,user_id,game_id,hand_id,'post-hit',{
         'user_hand':hand_value,
@@ -418,6 +439,7 @@ def hit():
     response = jsonify({
         'card': playingCard(rank=card[0], suit=card[1]).prettyReturn(),
         'hand_value': hand_value,
+        'card_count':card_count,
         'message': 'User hit'
     })
 
@@ -441,6 +463,7 @@ def stand():
 
     user_value = game_state.calculateHandValue(game_state.getUserHand())
     dealer_value = game_state.calculateHandValue(game_state.getDealerHand())
+    decks_remain = round(game_state.getStartingShoeSize()/52*(game_state.getShoeSize()/game_state.getStartingShoeSize()))
 
 
     if dealer_value > 21:
@@ -463,9 +486,10 @@ def stand():
         'user_hand':user_value,
         'dealer_hand':dealer_value,
         'balance':game_state.get_balance(),
-        'count':game_state.getCurrentCount(), 
+        'card_count':game_state.getCurrentCount(), 
         'true_count':game_state.getTrueCount(),
-        'bet': game_state.get_minbet()*2 if game_state.double_bet else game_state.get_minbet()
+        'min_bet': game_state.get_minbet()*2 if game_state.double_bet else game_state.get_minbet(),
+        'decks_remain':decks_remain
     })
 
     game_state.resolve_bets(outcome)
@@ -476,7 +500,11 @@ def stand():
         'user_value': user_value,
         'dealer_value': dealer_value,
         'result': result,
-        'balance':game_state.get_balance()
+        'balance':game_state.get_balance(),
+        'card_count':game_state.getCurrentCount(),
+        'true_count':game_state.getTrueCount(),
+        'decks_remain':decks_remain,
+        'min_bet':game_state.get_minbet()
     })
 
     GameStateService.save_game_state(user_id,session_id,game_state)
@@ -524,9 +552,12 @@ def double_down():
     
     game_state = GameStateService.load_game_state(user_id, session_id)
     game_state.double_bet = True
+    min_bet = game_state.get_minbet()*2
     game_state.user_balance -= game_state.get_minbet()
 
-    response = jsonify({'double_down': 'True'})
+    response = jsonify({'double_down': 'True',
+                        'min_bet':min_bet,
+                        'balance':game_state.get_balance()})
 
     GameStateService.save_game_state(user_id,session_id,game_state)
     log_usage(request,response)
@@ -567,7 +598,6 @@ def get_count():
     user_id = session['user_id']
     
     game_state = GameStateService.load_game_state(user_id, session_id)
-    print(type(game_state))
     response = jsonify({"card_count": game_state.getCurrentCount()})
 
     log_usage(request,response)
@@ -575,8 +605,10 @@ def get_count():
 
 @app.route('/get_true_count', methods=['GET'])
 def get_true_count():
-    
-    response = jsonify({"card_true_count": simulator.getTrueCount()})
+    session_id = session['session_id']
+    user_id = session['user_id']
+    game_state = GameStateService.load_game_state(user_id, session_id)
+    response = jsonify({"card_true_count": game_state.getTrueCount()})
     log_usage(request,response)
     return response
 

@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: app
-        image: 18arautm/microservices_final:app.3 # Replace with your Docker image
+        image: 18arautm/microservices_final:app.4 # Replace with your Docker image
         ports:
         - containerPort: 5000 # Your app's exposed port
         env:
