@@ -2,7 +2,7 @@
 
 # Project Description
 Relatively simple microservices app to help users learn how to and practice counting cards during games of BlackJack \
-Beta V1 deployed at [professorblackjack](https://professorblackjack.com) 
+Beta V1 deployed at [professorblackjack](https://professorblackjack.com) PAUSED DUE TO REOCURRING COSTS. MESSAGE ME IF INTERESTED!
 ## Contributing
 1. clone repo
 2. create venv and install requirements - I used vscode ide
